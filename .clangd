@@ -1,0 +1,36 @@
+CompileFlags:
+  # Add:
+  #   # ESP-IDF common flags
+  #   - -DHAVE_CONFIG_H
+  #   - -I.
+  #   # ESP32-S3 toolchain include paths
+  #   - -I/home/manuel/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/lib/gcc/xtensa-esp32s3-elf/12.2.0/../../../../xtensa-esp32s3-elf/include/c++/12.2.0
+  #   - -I/home/manuel/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/lib/gcc/xtensa-esp32s3-elf/12.2.0/../../../../xtensa-esp32s3-elf/include/c++/12.2.0/xtensa-esp32s3-elf
+  #   - -I/home/manuel/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/lib/gcc/xtensa-esp32s3-elf/12.2.0/../../../../xtensa-esp32s3-elf/include/c++/12.2.0/backward
+  #   - -I/home/manuel/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/lib/gcc/xtensa-esp32s3-elf/12.2.0/include
+  #   - -I/home/manuel/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/lib/gcc/xtensa-esp32s3-elf/12.2.0/include-fixed
+  #   - -I/home/manuel/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/lib/gcc/xtensa-esp32s3-elf/12.2.0/../../../../xtensa-esp32s3-elf/sys-include
+  #   - -I/home/manuel/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/lib/gcc/xtensa-esp32s3-elf/12.2.0/../../../../xtensa-esp32s3-elf/include
+  # Remove:
+  # #   # Remove flags that cause issues with clangd
+  #   - -fno-tree-switch-conversion
+  #   - -mtext-section-literals
+  #   - -mlongcalls
+  #   - -fstrict-volatile-bitfields
+  CompilationDatabase: build.clang/
+
+# Index settings
+# Index:
+#   Background: Build
+
+# # Diagnostic settings
+# Diagnostics:
+#   UnusedIncludes: None
+#   MissingIncludes: None
+#   ClangTidy:
+#     Add: 
+#       - readability-*
+#       - performance-*
+#     Remove:
+#       - readability-magic-numbers
+#       - readability-identifier-length

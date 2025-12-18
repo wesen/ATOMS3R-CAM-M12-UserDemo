@@ -1,0 +1,6 @@
+# Cursor/VS Code settings (optional - can be committed if team wants)
+# .vscode/
+# .clangd
+
+# But keep compile_commands.json symlink out of git
+compile_commands.json
