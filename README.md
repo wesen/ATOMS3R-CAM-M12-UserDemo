@@ -22,6 +22,12 @@ git clone --recursive <repository-url>
 
 [ESP-IDF v5.1.4](https://docs.espressif.com/projects/esp-idf/en/v5.1.4/esp32s3/index.html)
 
+### Cursor clangd setup (recommended)
+
+For Cursor C/C++ symbol resolution with ESP-IDF (clangd + ESP-clang + `build.clang/`), see:
+
+- [clangd Setup for Cursor](ttmp/2025/12/18/001-INITIAL-RECON--initial-firmware-reconnaissance-and-analysis/playbooks/01-clangd-setup-for-cursor.md)
+
 ### Build
 
 ```bash

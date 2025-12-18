@@ -37,3 +37,13 @@ Diary updated with Step 14 (regression root-cause via ZIP compare: missing Async
 - /home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/sdkconfig — Restored from ZIP baseline
 - /home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/ttmp/2025/12/18/001-INITIAL-RECON--initial-firmware-reconnaissance-and-analysis/reference/01-diary.md — Recorded full investigation and outcomes
 
+
+## 2025-12-18
+
+README: linked Cursor clangd setup playbook for ESP-IDF (ESP-clang + build.clang workflow).
+
+### Related Files
+
+- /home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/README.md — Added link to clangd setup playbook
+- /home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/ttmp/2025/12/18/001-INITIAL-RECON--initial-firmware-reconnaissance-and-analysis/playbooks/01-clangd-setup-for-cursor.md — Playbook referenced by README
+
