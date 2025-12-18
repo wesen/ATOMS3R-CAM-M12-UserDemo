@@ -415,6 +415,253 @@ Reviewed hardware abstraction layer to understand pin mappings and hardware-spec
 - No backlight control pin defined
 - Camera power is active-high (GPIO 18)
 
+## Step 11: clangd + Cursor IntelliSense Setup (ESP-clang / build.clang)
+
+This step focused on getting reliable C/C++ symbol resolution in Cursor for this ESP-IDF project. The core idea is: **clangd needs an accurate compilation database** (`compile_commands.json`) for all ESP-IDF include paths and flags. For ESP-IDF projects, the cleanest way to get that is to use **ESP-clang** and a dedicated `build.clang/` directory, while keeping the normal GCC build directory for actual firmware builds.
+
+I also documented the setup as a reusable playbook inside the ticket, so future work doesn’t need to re-derive the details.
+
+**Commit (code):** N/A — Tooling/configuration changes
+
+### What I did
+- Installed ESP-clang toolchain via ESP-IDF tooling:
+  - `idf_tools.py install esp-clang`
+- Generated a clang-based compilation database:
+  - `idf.py -B build.clang -D IDF_TOOLCHAIN=clang reconfigure`
+- Configured clangd to use the clang compilation database:
+  - Updated `.clangd` to point to `CompilationDatabase: build.clang/`
+- Pointed Cursor’s clangd to the ESP-clang-provided `clangd` binary via `.vscode/settings.json`
+- Created a ticket playbook documenting the above:
+  - `ttmp/.../playbooks/01-clangd-setup-for-cursor.md`
+
+### Why
+- ESP-IDF projects have a lot of generated include paths and config headers; without the correct compile flags, clangd can’t resolve symbols reliably.
+- Using `build.clang/` keeps IntelliSense stable without interfering with the normal GCC toolchain build output in `build/`.
+
+### What worked
+- `build.clang/compile_commands.json` was generated and is non-empty.
+- Cursor settings were simplified to focus only on clangd (no `c_cpp_properties.json`).
+- The playbook got moved into the ticket and updated to explicitly avoid symlink steps (since `.clangd` points to the compilation database).
+
+### What didn’t work (and what I changed)
+- Initially clangd wasn’t available as a system binary, so the setup required using ESP-clang’s `clangd` path.
+- We experimented with `.clangd` `CompileFlags.Add` for sysroot/include hacks; once `build.clang/` was in place, that became unnecessary and was removed/disabled in favor of the compilation database.
+
+### What I learned
+- The **Anysphere C/C++** integration in Cursor relies on clangd; clangd quality is dominated by `compile_commands.json`.
+- For ESP-IDF, using ESP-clang for generating `compile_commands.json` avoids a lot of manual header path plumbing.
+
+### Technical details
+- Key files:
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/.clangd`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/.vscode/settings.json`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/build.clang/compile_commands.json`
+- Key commands:
+  - `idf_tools.py install esp-clang`
+  - `idf.py -B build.clang -D IDF_TOOLCHAIN=clang reconfigure`
+- Playbook:
+  - `ttmp/2025/12/18/001-INITIAL-RECON--initial-firmware-reconnaissance-and-analysis/playbooks/01-clangd-setup-for-cursor.md`
+
+## Step 12: Convert repos.json dependencies to Git submodules
+
+This step replaced the “clone repos via `fetch_repos.py`” workflow with a Git submodule-based workflow. The goal is reproducible dependency pinning via the superproject’s commit, and a simpler “checkout + init” path for new developers.
+
+**Commit (code):** N/A — Repo dependency management changes
+
+### What I did
+- Created `.gitmodules` and added the following as submodules under `components/`:
+  - `components/mooncake` (pinned to tag `v1.2`)
+  - `components/arduino-esp32` (pinned to branch `v3.0.2`)
+  - `components/ArduinoJson` (pinned to tag `v7.0.4`)
+  - `components/esp32-camera` (pinned to tag `v2.0.10`)
+  - `components/M5GFX` (pinned to branch `0.1.16-with-arduino-as-component`)
+  - `components/M5Unified` (pinned to tag `0.1.16`)
+- Updated `README.md` to use:
+  - `git submodule update --init --recursive`
+- Rewrote `fetch_repos.py` to be a convenience wrapper around submodule initialization instead of ad-hoc cloning.
+- Updated `.gitignore` to stop ignoring `components/*` now that they’re tracked as submodules.
+
+### Why
+- Submodules make dependency versions explicit and reproducible (via the superproject commit).
+- Reduces “it works on my machine” drift vs. re-cloning moving branches.
+
+### What worked
+- Submodules were created and the working tree contains the expected component repos under `components/`.
+
+### What didn’t work (and what I changed)
+- `git submodule add -b ...` initially failed because `components/*` paths were ignored by `.gitignore`.
+  - Fix: removed those ignore entries (submodules need to be tracked).
+- `git submodule add -b v1.2 ...` failed because `v1.2` is a tag, not a branch.
+  - Fix: added submodules without `-b`, then checked out tags/branches inside each submodule and recorded the pinned commit in the superproject.
+
+### What I learned
+- `-b` in `git submodule add` expects a branch; tags should be handled by checking out the tag after adding (detached HEAD is expected).
+- If a path is ignored, Git will refuse to add it as a submodule unless forced; better to remove ignores if you want submodules tracked.
+
+### Technical details
+- Key files changed:
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/.gitmodules`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/.gitignore`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/README.md`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/fetch_repos.py`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/repos.json` (now historical; source-of-truth moved to `.gitmodules`)
+
+## Step 13: Build verification (GCC reconfigure + clang reconfigure)
+
+This step attempted to validate that the repository still configures and builds cleanly after the dependency-management changes (submodules) and the clangd/ESP-clang tooling work. The intent was to run both the normal ESP-IDF CMake reconfigure and the clang-toolchain reconfigure, then run a normal build.
+
+Both reconfigure attempts failed at the same point: `main/CMakeLists.txt` includes a CMake file named `gen_single_bin` that cannot be found.
+
+**Commit (code):** N/A — Verification only (no fixes applied)
+
+### What I did
+- Verified ESP-IDF tooling availability:
+  - `idf.py --version` → `ESP-IDF v5.1.6`
+- Ran normal (GCC toolchain) reconfigure + attempted build:
+  - `idf.py reconfigure`
+  - `idf.py build` (not reached due to reconfigure failure)
+- Ran clang toolchain reconfigure (for IntelliSense build dir):
+  - `idf.py -B build.clang -D IDF_TOOLCHAIN=clang reconfigure`
+
+### What worked
+- Both build directories were invoked correctly:
+  - Normal: `build/`
+  - Clang: `build.clang/`
+- Dependency resolution ran and lock file updates occurred as part of ESP-IDF’s dependency manager.
+
+### What didn’t work
+- **Normal reconfigure failed**:
+  - Error: `CMake Error at main/CMakeLists.txt:9 (include): include could not find requested file: gen_single_bin`
+  - Logs referenced by ESP-IDF:
+    - `build/log/idf_py_stderr_output_318788`
+    - `build/log/idf_py_stdout_output_318788`
+- **Clang reconfigure failed** with the same root error:
+  - Error: `CMake Error at main/CMakeLists.txt:9 (include): include could not find requested file: gen_single_bin`
+  - Logs:
+    - `build.clang/log/idf_py_stderr_output_320841`
+    - `build.clang/log/idf_py_stdout_output_320841`
+
+### What I learned
+- The build currently has a hard dependency on a CMake include file named `gen_single_bin` referenced from `main/CMakeLists.txt`.
+- This is independent of toolchain selection (GCC vs clang); it fails in both configurations.
+
+### What should be done in the future
+- Identify where `gen_single_bin` is supposed to come from (a component, a custom CMake module, or generated file), and restore/adjust the include path accordingly.
+- Re-run:
+  - `idf.py reconfigure && idf.py build`
+  - `idf.py -B build.clang -D IDF_TOOLCHAIN=clang reconfigure`
+
+### Technical details
+- Commands executed:
+  - `idf.py reconfigure`
+  - `idf.py -B build.clang -D IDF_TOOLCHAIN=clang reconfigure`
+- Failing include location:
+  - `main/CMakeLists.txt:9` → `include(gen_single_bin)`
+
+## Step 14: Root-cause the build regression using the original ZIP snapshot
+
+At this point the build failures were clearly *not* toolchain-specific: both the normal GCC configuration and the clang configuration failed initially due to missing `gen_single_bin`. Since you mentioned it “used to work” when the deps were cloned via `fetch_repos.py`, I switched to an evidence-based comparison against the original project ZIP (`~/Downloads/ATOMS3R-CAM-M12-UserDemo-M5Stack-20240927.zip`).
+
+The most important discovery: the original ZIP’s `components/` directory contains **AsyncTCP**, **ESPAsyncWebServer**, and **usb_device_uvc**, which were **not** part of `repos.json` and therefore were not being pulled in by our new submodule workflow. That missing `usb_device_uvc` component also explains why the component manager ended up deleting `cmake_utilities` earlier — and *that* is where `gen_single_bin.cmake` comes from.
+
+**Commit (code):** N/A — Investigation and corrective restores
+
+### What I did
+- Unzipped the original ZIP to a temp directory and compared:
+  - `components/` contents (ZIP vs current)
+  - `sdkconfig` diff (ZIP vs current)
+  - `dependencies.lock` diff (ZIP vs current)
+- Searched for `gen_single_bin` in:
+  - current repo
+  - ZIP snapshot
+  - ESP-IDF tree
+- Checked `usb_device_uvc`’s manifest for dependencies in the ZIP:
+  - It declares `cmake_utilities: "*"` and uses `espressif/tinyusb`
+- Restored missing components from the ZIP back into the current repo:
+  - `components/AsyncTCP`
+  - `components/ESPAsyncWebServer`
+  - `components/usb_device_uvc`
+
+### Why
+- If something “used to work”, the fastest path is usually to compare with a known-good snapshot and identify concrete deltas (missing components, config drift, lock file drift).
+- `include(gen_single_bin)` failing implies a missing CMake module; we needed to find which dependency supplies it.
+
+### What worked
+- ZIP vs current diffs immediately highlighted missing `components/usb_device_uvc` (and related webserver deps).
+- After the restore, `gen_single_bin.cmake` became available via:
+  - `managed_components/espressif__cmake_utilities/gen_single_bin.cmake`
+
+### What didn’t work
+- Neither the ZIP nor ESP-IDF itself contains a `gen_single_bin.cmake` in-tree; it is provided by the **component manager** as part of `espressif__cmake_utilities`.
+- Our earlier “submodules-only” conversion missed ZIP-vendored components not listed in `repos.json`.
+
+### What I learned
+- `gen_single_bin` is **not** an ESP-IDF built-in CMake module; it’s provided by the Component Manager via `espressif__cmake_utilities`.
+- `usb_device_uvc` depends on `cmake_utilities` (and `tinyusb`), so if `usb_device_uvc` isn’t present/configured, the solver may drop `cmake_utilities`, leading to the missing include.
+- Changes in `sdkconfig`/`dependencies.lock` are a strong signal that the build configuration drifted away from the known-good baseline.
+
+### Technical details
+- ZIP used for comparison:
+  - `~/Downloads/ATOMS3R-CAM-M12-UserDemo-M5Stack-20240927.zip`
+- ZIP `components/` contained (top-level):
+  - `AsyncTCP`, `ESPAsyncWebServer`, `usb_device_uvc`
+- `usb_device_uvc` manifest dependency of note:
+  - `cmake_utilities: "*"`
+- Restored component paths:
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/components/AsyncTCP`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/components/ESPAsyncWebServer`
+  - `/home/manuel/code/others/embedded/ATOMS3R-CAM-M12-UserDemo/components/usb_device_uvc`
+
+## Step 15: Stabilize dependency versions (dependencies.lock + sdkconfig) and achieve a successful build
+
+After restoring the missing components, the build progressed much further but failed inside `espressif__esp_insights` with `SHA_SIZE` undefined. This turned out to be a classic “lockfile drift” problem: our current `dependencies.lock` and `sdkconfig` had diverged from the ZIP snapshot (and the local ESP-IDF environment is `v5.1.6`, not the ZIP’s `v5.1.4`), which changed the resolved versions and compilation paths.
+
+The pragmatic fix (to validate the repo again) was to restore `dependencies.lock` and `sdkconfig` from the ZIP snapshot and rerun the build. That produced a clean build again.
+
+**Commit (code):** N/A — Configuration restore and verification
+
+### What I did
+- Observed the build failure:
+  - `managed_components/espressif__esp_insights/src/esp_insights_cbor_encoder.c:199:22: error: 'SHA_SIZE' undeclared`
+- Confirmed the build now sees `gen_single_bin.cmake`:
+  - `managed_components/espressif__cmake_utilities/gen_single_bin.cmake`
+- Compared `sdkconfig` and `dependencies.lock` (ZIP vs current) and confirmed substantial drift:
+  - `sdkconfig`: ZIP references ESP-IDF 5.1.4; current was 5.1.6 with config differences (including removed AsyncTCP config section).
+  - `dependencies.lock`: current no longer had `espressif/cmake_utilities` and had different versions/hashes for multiple components.
+- Restored both files from the ZIP snapshot:
+  - `dependencies.lock`
+  - `sdkconfig`
+- Re-ran build:
+  - `idf.py reconfigure && idf.py build`
+- Re-ran clang-toolchain reconfigure:
+  - `idf.py -B build.clang -D IDF_TOOLCHAIN=clang reconfigure`
+
+### Why
+- The build must be reproducible. If a known-good snapshot exists, restoring `sdkconfig` and `dependencies.lock` is the most direct way to get back to a consistent solver result.
+- The `SHA_SIZE` error strongly suggested a mismatch between component versions/headers (and likely conditional macros).
+
+### What worked
+- After restoring ZIP `sdkconfig` + `dependencies.lock`, the normal build succeeded:
+  - `Project build complete. ... Generated build/usb_webcam.bin`
+- Clang-toolchain reconfigure also succeeded once `cmake_utilities` + `usb_device_uvc` were back in play:
+  - `Configuring done ... Build files have been written to: build.clang`
+
+### What didn’t work
+- Building with drifted `sdkconfig` + lockfile produced a hard compile error in a managed component (`espressif__esp_insights`).
+
+### What I learned
+- `dependencies.lock` is not “noise”: it’s part of the reproducibility contract when using ESP-IDF’s component manager.
+- `sdkconfig` drift can remove component-specific configuration sections (e.g., AsyncTCP), which is a red flag when the project depends on those components.
+- Restoring the known-good baseline is a good first step before deciding whether to intentionally upgrade IDF/component versions.
+
+### Technical details
+- Failure observed:
+  - `SHA_SIZE` undeclared in `managed_components/espressif__esp_insights/src/esp_insights_cbor_encoder.c`
+- Key successful commands:
+  - `idf.py reconfigure`
+  - `idf.py build`
+  - `idf.py -B build.clang -D IDF_TOOLCHAIN=clang reconfigure`
+
 ## Summary of Research Process
 
 ### Files Examined
