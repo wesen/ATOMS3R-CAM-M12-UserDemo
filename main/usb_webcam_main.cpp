@@ -125,6 +125,7 @@ static void shared_data_injection()
 extern "C" int app_main(void)
 {
     spdlog::set_pattern("[%H:%M:%S] [%L] %v");
+    spdlog::info("app_main");
 
     /* ----------------------------------- DI ----------------------------------- */
     shared_data_injection();
